@@ -1,0 +1,245 @@
+---
+title: "Reproducible Research / Week 2 / Course Project 1"
+author: "Jpund"
+date: "2022-10-14"
+output: html_document
+---
+
+This document helps understand the analysis of data coming from the use of a personal activity monitoring device. This device collects data at 5 minute intervals through out the day. The data consists of two months of data from an anonymous individual collected during the months of October and November, 2012 and include the number of steps taken in 5 minute intervals each day.
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+### 1. Code for reading in the dataset and/or processing the data
+
+```{r reading dataset}
+wd <- getwd()
+download.file("https://d396qusza40orc.cloudfront.net/repdata%2Fdata%2Factivity.zip", destfile = paste0(wd,"/output.zip"))
+unzip(zipfile = "output.zip")
+data <- read.csv(file = "activity.csv", header = TRUE)
+summary(data)
+data$date <- as.Date(data$date, format="%Y-%m-%d")
+```
+
+### 2. What is mean total number of steps taken per day?
+
+##   - Calculate the total number of steps taken per day.
+
+```{r total steps per day}
+perday  <- aggregate(data$steps ~ data$date, data=data, FUN=sum)
+names(perday) <- c("date","stepsperday")
+head(perday)
+```
+
+##   - Make a histogram of the total number of steps taken each day.
+
+```{r }
+library(ggplot2)
+        
+g <- ggplot(perday, aes(y = stepsperday, x = date)) +
+        geom_bar(stat="identity") +
+        scale_x_date(date_labels = "%Y-%m-%d", date_breaks = "1 month") +
+        labs(x = "Date", y = "Steps per day")
+print(g)
+```
+
+##   - Calculate and report the mean and median of the total number of steps taken per day
+
+```{r }
+mean_steps <- mean(perday$stepsperday, na.rm = TRUE)
+median_steps <- median(perday$stepsperday, na.rm = TRUE)
+print(mean_steps)
+print(median_steps)
+```
+
+### 3. What is the average daily activity pattern?
+Make a time series plot of the 5-minute interval and the average number of steps taken, averaged across all days.
+
+```{r time series plot}
+#calculate the average number of steps taken for each 5-minutes interval across all days
+perinterval  <- aggregate(data$steps ~ data$interval, data=data, FUN=mean)
+names(perinterval) <- c("interval","mean_steps_per_interval")
+
+f  <- plot(perinterval$interval,perinterval$mean_steps_per_interval, type="l", 
+           xlab = "Interval", ylab="Mean number of steps")
+print(f)
+```
+
+Which 5-minute interval, on average across all the days in the dataset, contains the maximum number of steps? 
+
+```{r }
+perinterval[which.max(perinterval$mean_steps_per_interval),]
+```
+
+It is the interval 835.
+
+##   4. Imputing missing values
+  
+  - Calculate and report the total number of missing values in the dataset.
+
+```{r number of NAs}
+sum(is.na.data.frame(data))
+```
+
+##   - Devise a strategy for filling in all of the missing values in the dataset. 
+
+The mean number of steps for the whole period in the same interval as the NA value interval will be used. It is more likely that this person does the same thing at the same interval everyday than during the rest of the day. 
+
+##   - Create a new dataset that is equal to the original dataset but with the missing data filled in.
+
+```{r filling NAs}
+
+#thanks to summary(), we know there are only missing values in the steps column 
+
+data$nass <- is.na(data$steps)
+data$nona <- data$steps
+
+for (i in 1:17568){
+        if (data[i,4]==TRUE){
+           z=data[i,3]
+           mean_row=data[data$interval==z,]
+           
+           data[i,1] <- mean(mean_row[,5], na.rm = TRUE)
+        }
+}
+
+datanona <- data.frame(data$nona, data$date, data$interval)
+names(datanona) <- c("nona","data","interval")
+```
+
+
+
+##   - Calculate and report the mean and median total number of steps taken per day. 
+
+```{r }
+perdaynona  <- aggregate(data$nona ~ data$date, data=data, FUN=sum)
+names(perdaynona) <- c("date","stepsperday")
+
+mean_stepsnona <- mean(perdaynona$stepsperday, na.rm = TRUE)
+median_stepsnona <- median(perdaynona$stepsperday, na.rm = TRUE)
+
+j <- ggplot(perdaynona, aes(y = stepsperday, x = date)) +
+        geom_bar(stat="identity") +
+        scale_x_date(date_labels = "%Y-%m-%d", date_breaks = "1 month") +
+        labs(x = "Date", y = "Steps per day")
+print(j)
+```
+
+##   - Do these values differ from the estimates from the first part of the assignment? What is the impact of imputing missing data on the estimates of the total daily number of steps?
+
+It shows no impact on the mean and very little impact on the median (+1.18).
+
+```{r }
+print(mean_steps-mean_stepsnona)
+print(median_steps-median_stepsnona)
+```
+
+##   - Histogram of the total number of steps taken each day after missing values are imputed.
+  
+```{r }
+b <- ggplot(perdaynona, aes(y = stepsperday, x = date)) +
+        geom_bar(stat="identity") +
+        scale_x_date(date_labels = "%Y-%m-%d", date_breaks = "1 month") +
+        labs(x = "Date", y = "Steps per day")
+print(b)
+
+```
+
+##   - Panel plot comparing the average number of steps taken per 5-minute interval across weekdays and weekends
+```{r weekdays vs weekend}
+library(timeDate)
+library(RQuantLib)
+data$weekday <- isBusinessDay(calendar="WeekendsOnly", dates=data$date)
+
+perinterval  <- aggregate(data$steps ~ data$interval+data$weekday, data=data, FUN=mean)
+names(perinterval) <- c("interval","truwee","mean_steps_per_interval")
+
+k=ggplot(perinterval, aes(interval, mean_steps_per_interval)) + geom_point() + facet_grid(. ~ truwee) 
+```
+
+##   - All of the R code needed to reproduce the results (numbers, plots, etc.) in the report
+```{r, results="hide"}
+data <- read.csv(file = "activity.csv", header = TRUE)
+summary(data)
+data$date <- as.Date(data$date, format="%Y-%m-%d")
+
+perday  <- aggregate(data$steps ~ data$date, data=data, FUN=sum)
+names(perday) <- c("date","stepsperday")
+head(perday)
+
+library(ggplot2)
+        
+g <- ggplot(perday, aes(y = stepsperday, x = date)) +
+        geom_bar(stat="identity") +
+        scale_x_date(date_labels = "%Y-%m-%d", date_breaks = "1 month") +
+        labs(x = "Date", y = "Steps per day")
+print(g)
+
+mean_steps <- mean(perday$stepsperday, na.rm = TRUE)
+median_steps <- median(perday$stepsperday, na.rm = TRUE)
+print(mean_steps)
+print(median_steps)
+
+#calculate the average number of steps taken for each 5-minutes interval across all days
+perinterval  <- aggregate(data$steps ~ data$interval, data=data, FUN=mean)
+names(perinterval) <- c("interval","mean_steps_per_interval")
+
+f  <- plot(perinterval$interval,perinterval$mean_steps_per_interval, type="l", 
+           xlab = "Interval", ylab="Mean number of steps")
+print(f)
+
+perinterval[which.max(perinterval$mean_steps_per_interval),]
+
+sum(is.na.data.frame(data))
+
+#thanks to summary(), we know there are only missing values in the steps column 
+
+data$nass <- is.na(data$steps)
+data$nona <- data$steps
+
+for (i in 1:17568){
+        if (data[i,4]==TRUE){
+           z=data[i,3]
+           mean_row=data[data$interval==z,]
+           
+           data[i,1] <- mean(mean_row[,5], na.rm = TRUE)
+        }
+}
+
+datanona <- data.frame(data$nona, data$date, data$interval)
+names(datanona) <- c("nona","data","interval")
+
+perdaynona  <- aggregate(data$nona ~ data$date, data=data, FUN=sum)
+names(perdaynona) <- c("date","stepsperday")
+
+mean_stepsnona <- mean(perdaynona$stepsperday, na.rm = TRUE)
+median_stepsnona <- median(perdaynona$stepsperday, na.rm = TRUE)
+
+j <- ggplot(perdaynona, aes(y = stepsperday, x = date)) +
+        geom_bar(stat="identity") +
+        scale_x_date(date_labels = "%Y-%m-%d", date_breaks = "1 month") +
+        labs(x = "Date", y = "Steps per day")
+print(j)
+
+print(mean_steps-mean_stepsnona)
+print(median_steps-median_stepsnona)
+
+b <- ggplot(perdaynona, aes(y = stepsperday, x = date)) +
+        geom_bar(stat="identity") +
+        scale_x_date(date_labels = "%Y-%m-%d", date_breaks = "1 month") +
+        labs(x = "Date", y = "Steps per day")
+print(b)
+
+library(timeDate)
+library(RQuantLib)
+data$weekday <- isBusinessDay(calendar="WeekendsOnly", dates=data$date)
+
+perinterval  <- aggregate(data$steps ~ data$interval+data$weekday, data=data, FUN=mean)
+names(perinterval) <- c("interval","truwee","mean_steps_per_interval")
+
+k=ggplot(perinterval, aes(interval, mean_steps_per_interval)) + geom_point() + facet_grid(. ~ truwee) 
+
+```
+
+
